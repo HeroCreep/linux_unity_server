@@ -42,7 +42,7 @@ ip_address = socket.gethostbyname(socket.gethostname())
 hostname = socket.gethostname()
 
 # Define the server address and port
-server_address = (ip_address, $server_port)
+server_address = ('0.0.0.0', $server_port)
 
 # Password for server access
 server_password = "$server_password"
