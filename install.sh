@@ -1,167 +1,157 @@
 #!/bin/bash
 
-# Check if Python is installed
-if ! command -v python3 &> /dev/null; then
-    echo "Python is not installed. Please install Python 3 before running this script."
-    exit 1
+# Check if script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Please run as root"
+  exit 1
 fi
 
-# Get server name and port from user
-read -p "Enter server name: " SERVER_NAME
-read -p "Enter port (default 6060): " PORT
-PORT=${PORT:-6060}
+# Prompt user for server password
+read -p "Enter the server password: " server_password
 
-# Create server directory
-mkdir "$SERVER_NAME"
+# Prompt user for server port
+read -p "Enter the server port [default: 12345]: " server_port
+server_port=${server_port:-12345}
 
-# Create server logic file
-echo "from http.server import BaseHTTPRequestHandler, HTTPServer" > "$SERVER_NAME/server_logic.py"
-echo "from urllib.parse import urlparse, parse_qs" >> "$SERVER_NAME/server_logic.py"
-echo "import json" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "sessions = {}" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "class RequestHandler(BaseHTTPRequestHandler):" >> "$SERVER_NAME/server_logic.py"
-echo "    def do_GET(self):" >> "$SERVER_NAME/server_logic.py"
-echo "        parsed_path = urlparse(self.path)" >> "$SERVER_NAME/server_logic.py"
-echo "        query_params = parse_qs(parsed_path.query)" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        if parsed_path.path == \"/connect\":" >> "$SERVER_NAME/server_logic.py"
-echo "            self.handle_connect(query_params)" >> "$SERVER_NAME/server_logic.py"
-echo "        elif parsed_path.path == \"/loadSession\":" >> "$SERVER_NAME/server_logic.py"
-echo "            self.handle_load_session(query_params)" >> "$SERVER_NAME/server_logic.py"
-echo "        elif parsed_path.path == \"/read\":" >> "$SERVER_NAME/server_logic.py"
-echo "            self.handle_read(query_params)" >> "$SERVER_NAME/server_logic.py"
-echo "        # Add other GET endpoints as needed" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def do_POST(self):" >> "$SERVER_NAME/server_logic.py"
-echo "        parsed_path = urlparse(self.path)" >> "$SERVER_NAME/server_logic.py"
-echo "        query_params = parse_qs(parsed_path.query)" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        if parsed_path.path == \"/createSession\":" >> "$SERVER_NAME/server_logic.py"
-echo "            self.handle_create_session(query_params)" >> "$SERVER_NAME/server_logic.py"
-echo "        elif parsed_path.path == \"/store\":" >> "$SERVER_NAME/server_logic.py"
-echo "            self.handle_store(query_params)" >> "$SERVER_NAME/server_logic.py"
-echo "        # Add other POST endpoints as needed" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def do_DELETE(self):" >> "$SERVER_NAME/server_logic.py"
-echo "        parsed_path = urlparse(self.path)" >> "$SERVER_NAME/server_logic.py"
-echo "        query_params = parse_qs(parsed_path.query)" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        if parsed_path.path == \"/delete\":" >> "$SERVER_NAME/server_logic.py"
-echo "            self.handle_delete(query_params)" >> "$SERVER_NAME/server_logic.py"
-echo "        # Add other DELETE endpoints as needed" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def do_PUT(self):" >> "$SERVER_NAME/server_logic.py"
-echo "        parsed_path = urlparse(self.path)" >> "$SERVER_NAME/server_logic.py"
-echo "        query_params = parse_qs(parsed_path.query)" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        if parsed_path.path == \"/update\":" >> "$SERVER_NAME/server_logic.py"
-echo "            self.handle_update(query_params)" >> "$SERVER_NAME/server_logic.py"
-echo "        # Add other PUT endpoints as needed" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def send_response_json(self, data):" >> "$SERVER_NAME/server_logic.py"
-echo "        self.send_response(200)" >> "$SERVER_NAME/server_logic.py"
-echo "        self.send_header('Content-type', 'application/json')" >> "$SERVER_NAME/server_logic.py"
-echo "        self.end_headers()" >> "$SERVER_NAME/server_logic.py"
-echo "        self.wfile.write(json.dumps(data).encode('utf-8'))" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def handle_connect(self, query_params):" >> "$SERVER_NAME/server_logic.py"
-echo "        # Implement connection logic" >> "$SERVER_NAME/server_logic.py"
-echo "        # Example: check token validity" >> "$SERVER_NAME/server_logic.py"
-echo "        self.send_response_json({\"status\": \"connected\"})" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def handle_create_session(self, query_params):" >> "$SERVER_NAME/server_logic.py"
-echo "        session_name = query_params.get('name', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "        session_password = query_params.get('password', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        # Implement session creation logic" >> "$SERVER_NAME/server_logic.py"
-echo "        # Example: create a new session and store it in the 'sessions' dictionary" >> "$SERVER_NAME/server_logic.py"
-echo "        sessions[session_name] = {\"password\": session_password, \"data\": {}}" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        self.send_response_json({\"status\": \"session_created\"})" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def handle_load_session(self, query_params):" >> "$SERVER_NAME/server_logic.py"
-echo "        session_name = query_params.get('name', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "        session_password = query_params.get('password', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        # Implement session loading logic" >> "$SERVER_NAME/server_logic.py"
-echo "        # Example: check if the session exists and the password is correct" >> "$SERVER_NAME/server_logic.py"
-echo "        if session_name in sessions and sessions[session_name][\"password\"] == session_password:" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"session_loaded\", \"data\": sessions[session_name][\"data\"]})" >> "$SERVER_NAME/server_logic.py"
-echo "        else:" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"session_not_found\"})" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def handle_store(self, query_params):" >> "$SERVER_NAME/server_logic.py"
-echo "        session_name = query_params.get('sessionData', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "        name = query_params.get('name', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "        data = query_params.get('data', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        # Implement data storing logic" >> "$SERVER_NAME/server_logic.py"
-echo "        # Example: store data in the specified session" >> "$SERVER_NAME/server_logic.py"
-echo "        if session_name in sessions:" >> "$SERVER_NAME/server_logic.py"
-echo "            sessions[session_name][\"data\"][name] = data" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"data_stored\"})" >> "$SERVER_NAME/server_logic.py"
-echo "        else:" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"session_not_found\"})" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def handle_read(self, query_params):" >> "$SERVER_NAME/server_logic.py"
-echo "        session_name = query_params.get('sessionData', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "        name = query_params.get('name', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        # Implement data reading logic" >> "$SERVER_NAME/server_logic.py"
-echo "        # Example: read data from the specified session" >> "$SERVER_NAME/server_logic.py"
-echo "        if session_name in sessions and name in sessions[session_name][\"data\"]:" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"data_read\", \"data\": sessions[session_name][\"data\"][name]})" >> "$SERVER_NAME/server_logic.py"
-echo "        else:" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"data_not_found\"})" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def handle_delete(self, query_params):" >> "$SERVER_NAME/server_logic.py"
-echo "        session_name = query_params.get('sessionData', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "        name = query_params.get('name', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        # Implement data deletion logic" >> "$SERVER_NAME/server_logic.py"
-echo "        # Example: delete data from the specified session" >> "$SERVER_NAME/server_logic.py"
-echo "        if session_name in sessions and name in sessions[session_name][\"data\"]:" >> "$SERVER_NAME/server_logic.py"
-echo "            del sessions[session_name][\"data\"][name]" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"data_deleted\"})" >> "$SERVER_NAME/server_logic.py"
-echo "        else:" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"data_not_found\"})" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "    def handle_update(self, query_params):" >> "$SERVER_NAME/server_logic.py"
-echo "        session_name = query_params.get('sessionData', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "        name = query_params.get('name', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "        new_data = query_params.get('newData', [''])[0]" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "        # Implement data updating logic" >> "$SERVER_NAME/server_logic.py"
-echo "        # Example: update data in the specified session" >> "$SERVER_NAME/server_logic.py"
-echo "        if session_name in sessions and name in sessions[session_name][\"data\"]:" >> "$SERVER_NAME/server_logic.py"
-echo "            sessions[session_name][\"data\"][name] = new_data" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"data_updated\"})" >> "$SERVER_NAME/server_logic.py"
-echo "        else:" >> "$SERVER_NAME/server_logic.py"
-echo "            self.send_response_json({\"status\": \"data_not_found\"})" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "def run(server_class=HTTPServer, handler_class=RequestHandler, port=$PORT):" >> "$SERVER_NAME/server_logic.py"
-echo "    server_address = ('', port)" >> "$SERVER_NAME/server_logic.py"
-echo "    httpd = server_class(server_address, handler_class)" >> "$SERVER_NAME/server_logic.py"
-echo "    print(f'Starting server on port {port}')" >> "$SERVER_NAME/server_logic.py"
-echo "    httpd.serve_forever()" >> "$SERVER_NAME/server_logic.py"
-echo "" >> "$SERVER_NAME/server_logic.py"
-echo "if __name__ == '__main__':" >> "$SERVER_NAME/server_logic.py"
-echo "    run()" >> "$SERVER_NAME/server_logic.py"
+# Detect machine's IP address
+ip_address=$(hostname -I | cut -f1 -d' ')
 
-# Create start script
-echo "#!/bin/bash" > "$SERVER_NAME/start"
-echo "python3 $(pwd)/$SERVER_NAME/server_logic.py" >> "$SERVER_NAME/start"
-chmod +x "$SERVER_NAME/start"
+# Detect machine's hostname
+hostname=$(hostname)
 
-# Install dependencies
-echo "Installing dependencies..."
-sudo apt-get update
-sudo apt-get install -y python3
+# Generate a random token
+token=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32)
 
-# Display information
-echo "Server installed successfully:"
-echo "Server name: $SERVER_NAME"
-echo "Port: $PORT"
-echo "To start the server, run: ./$SERVER_NAME/start"
+# Install necessary dependencies
+apt-get update
+apt-get install -y python3 python3-pip
+
+# Install required Python packages
+pip3 install --upgrade pip
+pip3 install pickle5  # Used for Python 3.7 compatibility
+
+# Create a directory for the server
+mkdir /opt/player_server
+cd /opt/player_server
+
+# Create the Python server script
+cat <<EOL > server.py
+import socket
+import pickle
+import os
+
+# Detect the machine's IP address and hostname
+ip_address = socket.gethostbyname(socket.gethostname())
+hostname = socket.gethostname()
+
+# Define the server address and port
+server_address = ('0.0.0.0', $server_port)
+
+# Password for server access
+server_password = "$server_password"
+
+# Randomly generated token
+server_token = "$token"
+
+# Create a folder to store data files
+data_folder = "player_data"
+os.makedirs(data_folder, exist_ok=True)
+
+def handle_data(client_socket):
+    while True:
+        data = client_socket.recv(1024)
+        if not data:
+            break
+
+        received_data = pickle.loads(data)
+        process_data(received_data)
+
+def process_data(data):
+    if "password" in data and data["password"] == server_password and "token" in data and data["token"] == server_token:
+        command = data["command"]
+
+        if command == "store":
+            name = data["name"]
+            value = data["value"]
+            store_data(name, value)
+
+        elif command == "read":
+            name = data["name"]
+            send_data(read_data(name))
+
+        elif command == "remove":
+            name = data["name"]
+            remove_data(name)
+
+        elif command == "update":
+            name = data["name"]
+            new_value = data["new_value"]
+            update_data(name, new_value)
+
+def store_data(name, value):
+    with open(f"{data_folder}/{name}.pickle", "wb") as file:
+        pickle.dump(value, file)
+
+def read_data(name):
+    try:
+        with open(f"{data_folder}/{name}.pickle", "rb") as file:
+            return pickle.load(file)
+    except FileNotFoundError:
+        return None
+
+def remove_data(name):
+    file_path = f"{data_folder}/{name}.pickle"
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+def update_data(name, new_value):
+    if read_data(name) is not None:
+        store_data(name, new_value)
+
+def send_data(data):
+    client_socket.send(pickle.dumps(data))
+
+
+def main():
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind(server_address)
+    server_socket.listen(1)
+    print(f"Server listening on {server_address}")
+    print(f"Token: {server_token}")
+
+    client_socket, client_address = server_socket.accept()
+    print(f"Connection from {client_address}")
+
+    handle_data(client_socket)
+
+    client_socket.close()
+    server_socket.close()
+
+
+if __name__ == "__main__":
+    main()
+EOL
+
+# Create a systemd service file
+cat <<EOL > /etc/systemd/system/player_server.service
+[Unit]
+Description=Player Server
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/player_server/server.py
+Restart=always
+User=nobody
+Group=nogroup
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+# Enable and start the service
+systemctl enable player_server.service
+systemctl start player_server.service
+
+echo "Server installation completed successfully"
+echo "You can connect to the server using IP address: $ip_address or hostname: $hostname"
+echo "Token: $token"
