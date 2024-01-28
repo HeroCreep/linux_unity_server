@@ -1,157 +1,108 @@
 #!/bin/bash
 
-# Check if script is run as root
-if [ "$(id -u)" -ne 0 ]; then
-  echo "Please run as root"
-  exit 1
+# Function to generate a random token
+generate_token() {
+    head -c 32 /dev/urandom | base64 | tr -d '+/=' | cut -c1-32
+}
+
+# Install Node.js if not already installed
+if ! command -v node &> /dev/null; then
+    echo "Node.js not found. Installing..."
+    sudo apt-get update
+    sudo apt-get install -y nodejs
 fi
 
-# Prompt user for server password
-read -p "Enter the server password: " server_password
+# Install npm if not already installed
+if ! command -v npm &> /dev/null; then
+    echo "npm not found. Installing..."
+    sudo apt-get install -y npm
+fi
 
-# Prompt user for server port
-read -p "Enter the server port [default: 12345]: " server_port
-server_port=${server_port:-12345}
-
-# Detect machine's IP address
-ip_address=$(hostname -I | cut -f1 -d' ')
-
-# Detect machine's hostname
-hostname=$(hostname)
+# Ask for the port number
+read -p "Enter the port number for the server (default is 3000): " port
+port=${port:-3000}
 
 # Generate a random token
-token=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32)
+token=$(generate_token)
 
-# Install necessary dependencies
-apt-get update
-apt-get install -y python3 python3-pip
+# Create the server script
+echo "const express = require('express');
+const bodyParser = require('body-parser');
+const app = express();
+const port = $port;
 
-# Install required Python packages
-pip3 install --upgrade pip
-pip3 install pickle5  # Used for Python 3.7 compatibility
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 
-# Create a directory for the server
-mkdir /opt/player_server
-cd /opt/player_server
+let sessions = {};
 
-# Create the Python server script
-cat <<EOL > server.py
-import socket
-import pickle
-import os
+app.get('/', (req, res) => {
+    const token = req.header('Authorization').replace('Bearer ', '');
+    const sessionName = req.header('Session-Name');
+    const password = req.header('Password');
 
-# Detect the machine's IP address and hostname
-ip_address = socket.gethostbyname(socket.gethostname())
-hostname = socket.gethostname()
+    if (validateToken(token) && validateSession(sessionName, password)) {
+        res.send('Connection successful!');
+    } else {
+        res.status(401).send('Unauthorized');
+    }
+});
 
-# Define the server address and port
-server_address = ('0.0.0.0', $server_port)
+app.post('/create-session', (req, res) => {
+    const token = req.header('Authorization').replace('Bearer ', '');
+    const sessionName = req.header('Session-Name');
+    const password = req.header('Password');
 
-# Password for server access
-server_password = "$server_password"
+    if (validateToken(token) && !sessions[sessionName]) {
+        sessions[sessionName] = { password, data: {} };
+        res.send('Session created successfully!');
+    } else {
+        res.status(401).send('Unauthorized or Session already exists');
+    }
+});
 
-# Randomly generated token
-server_token = "$token"
+app.post('/store-data', (req, res) => {
+    const token = req.header('Authorization').replace('Bearer ', '');
+    const sessionName = req.header('Session-Name');
+    const key = req.header('Key');
+    const value = req.header('Value');
 
-# Create a folder to store data files
-data_folder = "player_data"
-os.makedirs(data_folder, exist_ok=True)
+    if (validateToken(token) && validateSession(sessionName) && key && value) {
+        sessions[sessionName].data[key] = value;
+        res.send('Data stored successfully!');
+    } else {
+        res.status(401).send('Unauthorized or Invalid data');
+    }
+});
 
-def handle_data(client_socket):
-    while True:
-        data = client_socket.recv(1024)
-        if not data:
-            break
+app.get('/read-data', (req, res) => {
+    const token = req.header('Authorization').replace('Bearer ', '');
+    const sessionName = req.header('Session-Name');
+    const key = req.query.key;
 
-        received_data = pickle.loads(data)
-        process_data(received_data)
+    if (validateToken(token) && validateSession(sessionName) && key) {
+        const data = sessions[sessionName].data[key];
+        res.send(data || 'Data not found');
+    } else {
+        res.status(401).send('Unauthorized or Invalid data');
+    }
+});
 
-def process_data(data):
-    if "password" in data and data["password"] == server_password and "token" in data and data["token"] == server_token:
-        command = data["command"]
+app.listen(port, () => {
+    console.log(\`Server is running at http://127.0.0.1:\${port}\`);
+});
 
-        if command == "store":
-            name = data["name"]
-            value = data["value"]
-            store_data(name, value)
+function validateToken(token) {
+    return token === '$token';
+}
 
-        elif command == "read":
-            name = data["name"]
-            send_data(read_data(name))
+function validateSession(sessionName, password) {
+    return sessions[sessionName] && sessions[sessionName].password === password;
+}" > server.js
 
-        elif command == "remove":
-            name = data["name"]
-            remove_data(name)
+echo "Node.js server script created successfully!"
 
-        elif command == "update":
-            name = data["name"]
-            new_value = data["new_value"]
-            update_data(name, new_value)
+# Install required npm packages
+npm install express body-parser
 
-def store_data(name, value):
-    with open(f"{data_folder}/{name}.pickle", "wb") as file:
-        pickle.dump(value, file)
-
-def read_data(name):
-    try:
-        with open(f"{data_folder}/{name}.pickle", "rb") as file:
-            return pickle.load(file)
-    except FileNotFoundError:
-        return None
-
-def remove_data(name):
-    file_path = f"{data_folder}/{name}.pickle"
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
-def update_data(name, new_value):
-    if read_data(name) is not None:
-        store_data(name, new_value)
-
-def send_data(data):
-    client_socket.send(pickle.dumps(data))
-
-
-def main():
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(server_address)
-    server_socket.listen(1)
-    print(f"Server listening on {server_address}")
-    print(f"Token: {server_token}")
-
-    client_socket, client_address = server_socket.accept()
-    print(f"Connection from {client_address}")
-
-    handle_data(client_socket)
-
-    client_socket.close()
-    server_socket.close()
-
-
-if __name__ == "__main__":
-    main()
-EOL
-
-# Create a systemd service file
-cat <<EOL > /etc/systemd/system/player_server.service
-[Unit]
-Description=Player Server
-
-[Service]
-ExecStart=/usr/bin/python3 /opt/player_server/server.py
-Restart=always
-User=nobody
-Group=nogroup
-Environment=PYTHONUNBUFFERED=1
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-# Enable and start the service
-systemctl enable player_server.service
-systemctl start player_server.service
-
-echo "Server installation completed successfully"
-echo "You can connect to the server using IP address: $ip_address or hostname: $hostname"
-echo "Token: $token"
+echo "Installation complete! Run the server using: node server.js"
